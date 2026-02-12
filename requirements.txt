@@ -7,3 +7,7 @@ pyarrow
 cloudpathlib[gs]
 python-dotenv
 matplotlib
+openai
+tiktoken
+pydantic_settings
+google-api-python-client
