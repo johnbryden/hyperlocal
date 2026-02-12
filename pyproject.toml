@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "labcats"
+version = "0.1.0"
+description = "GCF project for hyperlocal"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]            # your package is app
+exclude = ["tests*"]
+
+

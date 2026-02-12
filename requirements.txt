@@ -1,0 +1,9 @@
+pandas
+numpy
+requests
+tqdm
+elasticsearch
+pyarrow
+cloudpathlib[gs]
+python-dotenv
+matplotlib
