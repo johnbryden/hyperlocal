@@ -6,7 +6,7 @@ import app.google_sheets as gs
 from datetime import datetime
 from tqdm import tqdm
 
-# TODO, post.body and post.comment_texts should be more freeform
+# TODO, post.body and post.comment_texts should be more freeform in terms of which columns to use.
 
 from importlib import reload
 reload(ai)

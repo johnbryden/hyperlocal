@@ -15,9 +15,10 @@ Cloud Run note
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from typing import Optional
 
+from cloudpathlib import AnyPath
 from pydantic import Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv, find_dotenv
@@ -38,8 +39,22 @@ if dotenv_path:
 # ----------------------------
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     # Base
     open_router_key: str = Field(None, alias="OPEN_ROUTER_KEY")
+    gc_project: Optional[str] = Field(None, alias="GC_PROJECT")
+    root_path: str = Field("gs://categorum-test/hyperlocal", alias="ROOT_PATH")
+
+    @cached_property
+    def root(self) -> AnyPath:
+        """root_path as an AnyPath (works for local and GCS paths)."""
+        return AnyPath(self.root_path)
+
+    @cached_property
+    def data_root(self) -> AnyPath:
+        """Convenience: root / 'data'."""
+        return self.root / "data"
 
 
 

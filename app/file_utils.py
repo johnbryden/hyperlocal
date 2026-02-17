@@ -6,6 +6,9 @@ import pandas as pd
 import re
 from typing import Any
 
+from google.cloud import storage
+
+from app.settings import settings
 from app.simple_logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,12 +33,46 @@ def file_name_to_slug(file_name_or_path) -> str | AnyPath:
         file_name = str(getattr(file_name_or_path, "name", file_name_or_path))
         return slugify(file_name)
 
+def ensure_bucket(bucket_name: str, *, project: str | None = None, location: str = "europe-west2") -> storage.Bucket:
+    """
+    Look up a GCS bucket by name and create it if it doesn't exist.
+
+    Args:
+        bucket_name: Name of the GCS bucket (e.g. "categorum-test").
+        project: GCP project ID. Falls back to the ``GC_PROJECT`` env var /
+                 settings value when *None*.
+        location: GCS region for a newly-created bucket. Default is London.
+
+    Returns:
+        The existing or newly-created ``storage.Bucket`` object.
+    """
+    project = project or settings.gc_project
+    client = storage.Client(project=project)
+    bucket = client.lookup_bucket(bucket_name)
+    if bucket is None:
+        bucket = client.bucket(bucket_name)
+        bucket.storage_class = "STANDARD"
+        bucket.location = location
+        bucket = client.create_bucket(bucket)
+        logger.info(f"Created bucket: {bucket.name}")
+    else:
+        logger.info(f"Bucket already exists: {bucket.name}")
+    return bucket
+
+
 def maybe_mkdir(dirpath) -> None:
     """
     Best-effort mkdir for local paths.
 
-    For cloud paths, directories are typically virtual so this is a no-op.
+    For GCS cloud paths the bucket is created if it doesn't already exist;
+    sub-"directories" inside the bucket are virtual and need no creation.
     """
+    # GCS cloud paths expose a `.bucket` attribute via cloudpathlib
+    bucket_name = getattr(dirpath, "bucket", None)
+    if bucket_name:
+        ensure_bucket(bucket_name)
+        return
+
     try:
         dirpath.mkdir(parents=True, exist_ok=True)
     except (NotImplementedError, AttributeError):
