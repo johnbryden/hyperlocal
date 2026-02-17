@@ -360,106 +360,157 @@ category_list = {categories_descriptions}
 
     def _stage3_tagging(self, df: pd.DataFrame, context_description: str) -> pd.DataFrame:
         """
-        Tag posts per category, storing tag id via TagManager.
+        Tag posts per category using a 3-step workflow:
+        1) tag_with_existing — match against known tags only
+        2) generate_new_tags — propose tags from still-untagged posts
+        3) iterate_tagging_posts_sequentially — re-tag still-untagged with the expanded list
+
+        Posts are batched by the full ``category`` column (main + sub-category).
         """
+        from app.tagging_posts import (
+            tag_with_existing,
+            generate_new_tags,
+            iterate_tagging_posts_sequentially,
+        )
+
         model = self._get_model("POSTS_STAGE3_MODEL", "google/gemini-2.5-flash")
         self._region = derive_region_from_df(df)
         logger.info("Stage 3: starting TagManager", extra={"model": model, "tags_path": self.tags_path})
+
         with TagManager(tags_path=self.tags_path) as tag_manager:
-
             results: List[pd.DataFrame] = []
-            main_categories = df["main_category"].dropna().unique().tolist() if "main_category" in df.columns else [None]
-            logger.info("Stage 3: main_category batches", extra={"count": len(main_categories), "main_categories": main_categories})
+            categories = df["category"].dropna().unique().tolist() if "category" in df.columns else [None]
+            logger.info("Stage 3: category batches", extra={"count": len(categories), "categories": categories})
 
-            for main_category in main_categories:
-                subset = df[df["main_category"] == main_category] if main_category is not None else df
+            for category in categories:
+                subset = df[df["category"] == category] if category is not None else df
                 if subset.empty:
                     continue
 
-                # main_category is used for tag records
-                main_category = str(main_category).strip() if main_category else "Uncategorised"
+                category_label = str(category).strip() if category else "Uncategorised"
 
                 logger.info(
-                    "Stage 3: processing main_category subset",
-                    extra={"main_category": main_category, "rows": len(subset)},
+                    "Stage 3: processing category subset",
+                    extra={"category": category_label, "rows": len(subset)},
                 )
 
-                tags_record_df = tag_manager.get_tags_for_category(main_category)[["tag", "tag_description"]].copy()
+                context = "locally salient issue"
+                avoid = "local, locally salient, issue"
+                ctx_desc = f"{context_description} — locally salient {category_label} issue in {self._region}."
 
-                # Build context and description emphasising locally salient issue and location
-                context_label = "locally salient issue"
-                if main_category:
-                    ctx_desc = f"{context_description} — locally salient {main_category} issue in {self._region}."
-                else:
-                    ctx_desc = f"{context_description} — locally salient issue in {self._region}"
+                # --- Step 1: Get existing tags from TagManager ---
+                tags_record_df = tag_manager.get_tags_for_category(category_label)[["tag", "tag_description"]].copy()
+                logger.info(
+                    "Stage 3: existing tags for category",
+                    extra={"category": category_label, "tag_count": len(tags_record_df)},
+                )
 
-                processed_subset, _ = self._run_tagging_for_subset(
+                # --- Step 2: Tag with existing tags only ---
+                tagged_df, updated_tags_df = tag_with_existing(
                     subset,
-                    tags_record_df=tags_record_df,
-                    context=context_label,
+                    tags_record_df,
+                    context=context,
                     context_description=ctx_desc,
+                    avoid=avoid,
+                    more_specific_than_column="category",
+                    response_column="tag",
+                    response_column_description="tag_description",
                     model=model,
                 )
 
-                # Preserve main_category and sub_category from original subset
-                if "main_category" not in processed_subset.columns:
-                    processed_subset["main_category"] = main_category
-                if "sub_category" not in processed_subset.columns and "sub_category" in subset.columns:
-                    # Preserve sub_category values by index
-                    processed_subset["sub_category"] = subset.loc[processed_subset.index, "sub_category"]
+                _valid_tag = tagged_df["tag"].notna() & (tagged_df["tag"] != "No tag")
+                n_tagged = _valid_tag.sum()
+                n_untagged = (tagged_df["tag"] == "No tag").sum()
+                n_failed = tagged_df["tag"].isna().sum()
+                logger.info(
+                    "Stage 3: after tag_with_existing",
+                    extra={
+                        "category": category_label,
+                        "tagged": int(n_tagged),
+                        "untagged": int(n_untagged),
+                        "failed": int(n_failed),
+                    },
+                )
+
+                # --- Step 3: Generate new tags from untagged posts ---
+                expanded_tags_df = generate_new_tags(
+                    tagged_df,
+                    updated_tags_df,
+                    context=context,
+                    context_description=ctx_desc,
+                    avoid=avoid,
+                    response_column="tag",
+                    response_column_description="tag_description",
+                )
+                logger.info(
+                    "Stage 3: after generate_new_tags",
+                    extra={"category": category_label, "total_tags": len(expanded_tags_df)},
+                )
+
+                # --- Step 4: Re-tag still-untagged posts with the expanded tag list ---
+                # Rows needing re-tagging: "No tag" sentinel OR NaN (LLM never returned a valid response)
+                _needs_retag = tagged_df["tag"].isna() | (tagged_df["tag"] == "No tag")
+                still_untagged = tagged_df[_needs_retag].copy()
+                if not still_untagged.empty:
+                    still_untagged = still_untagged.drop(columns=["tag", "tag_description"], errors="ignore")
+
+                    final_untagged_df, final_tags_df = iterate_tagging_posts_sequentially(
+                        still_untagged,
+                        tags_record_df=expanded_tags_df,
+                        context=context,
+                        context_description=ctx_desc,
+                        avoid=avoid,
+                        more_specific_than_column="category",
+                        response_column="tag",
+                        response_column_description="tag_description",
+                        model=model,
+                        drop_meta_columns=True,
+                    )
+
+                    already_tagged = tagged_df[~_needs_retag]
+                    combined_df = pd.concat([already_tagged, final_untagged_df]).sort_index()
+                else:
+                    combined_df = tagged_df
+
+                logger.info(
+                    "Stage 3: category complete",
+                    extra={"category": category_label, "total_posts": len(combined_df)},
+                )
+
+                # Persist all generated tags (even those not assigned to a post yet)
+                for _, tag_row in expanded_tags_df.iterrows():
+                    t = tag_row.get("tag")
+                    d = tag_row.get("tag_description", "")
+                    if pd.isna(t) or t == "No tag":
+                        continue
+                    cat_mask = (tag_manager.df["tag"] == t) & (tag_manager.df["category"] == category_label)
+                    if not cat_mask.any():
+                        tag_manager.add_new_tag(t, category_label, d)
 
                 # Map to TagManager and attach tag_id
-                for idx, row in processed_subset.iterrows():
+                for idx, row in combined_df.iterrows():
                     tag = row.get("tag")
                     desc = row.get("tag_description", "")
                     if pd.isna(tag):
                         continue
 
-                    existing_mask = tag_manager.df["tag"] == tag
+                    existing_mask = (tag_manager.df["tag"] == tag) & (tag_manager.df["category"] == category_label)
                     if existing_mask.any():
                         tag_id = int(tag_manager.df.loc[existing_mask, "id"].iloc[0])
-                        tag_manager.update_tag(tag_id, tag, main_category, desc)
+                        tag_manager.update_tag(tag_id, tag, category_label, desc)
                     else:
-                        tag_id = tag_manager.add_new_tag(tag, main_category, desc)
-                    processed_subset.at[idx, "tag_id"] = tag_id
+                        tag_id = tag_manager.add_new_tag(tag, category_label, desc)
+                    combined_df.at[idx, "tag_id"] = tag_id
 
-                results.append(processed_subset)
+                results.append(combined_df)
 
             tag_manager.save()
 
         if results:
             combined = pd.concat(results, axis=0).sort_index()
-            # Keep only tag_id on the df; tag/tag_description can be added via TagManager.merge_tags()
             combined = combined.drop(columns=["tag", "tag_description"], errors="ignore")
             return combined
         return df
-
-    def _run_tagging_for_subset(
-        self,
-        df_subset: pd.DataFrame,
-        tags_record_df: pd.DataFrame,
-        context: str,
-        context_description: str,
-        model: str,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Reuse the sequential tagging flow for a subset, keeping it simple.
-        """
-        from app.tagging_posts import iterate_tagging_posts_sequentially
-
-        processed_df, updated_tags_df = iterate_tagging_posts_sequentially(
-            df_subset,
-            tags_record_df=tags_record_df,
-            context=context,
-            context_description=context_description,
-            avoid="local, locally salient, issue",
-            more_specific_than_column="category",
-            response_column="tag",
-            response_column_description="tag_description",
-            model=model,
-            drop_meta_columns=True,
-        )
-        return processed_df, updated_tags_df
 
 
 def process_posts(

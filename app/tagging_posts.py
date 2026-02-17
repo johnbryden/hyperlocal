@@ -182,6 +182,13 @@ def _sequential_tagging_loop(
         return ai.get_num_tokens(text)
 
     df_result = df_posts.copy()
+
+    # Ensure response columns exist so callers never hit a KeyError
+    if response_column not in df_result.columns:
+        df_result[response_column] = None
+    if response_column_description not in df_result.columns:
+        df_result[response_column_description] = None
+
     if 'ai_wrapper_success' not in df_result.columns:
         df_result['ai_wrapper_success'] = False
     else:

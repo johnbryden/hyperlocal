@@ -1,13 +1,14 @@
 {
   "Environmental": {
-    "Waste Management & Recycling": "Covers all issues related to refuse collection, including bin schedules, recycling protocols, and complaints regarding fly-tipping or illegal dumping.",
-    "Local Government Maintenance": "Focuses on the operational performance of local authorities regarding the upkeep of public infrastructures, parks, and transparency in communicating service disruptions.",
+    "Waste Management & Recycling": "Covers all issues related to refuse collection, including bin schedules, recycling protocols, street cleaning services, sanitation facilities, and complaints regarding fly-tipping or illegal dumping.",
     "Urban Planning & Green Spaces": "Pertains to land-use decisions, including housing developments on greenbelts, urban aesthetics, and the preservation of natural landscapes.",
-    "Water Management & Pollution": "Addresses hydrological issues such as flood control, drainage failure, sewage spills, and general water quality or contamination concerns.",
+    "Flooding & Drainage": "Addresses flood control, drainage failure, surface water flooding, and related hydrological infrastructure concerns.",
+    "Sewage & Water Pollution": "Covers sewage spills, sewage system failures, and general water quality or contamination concerns.",
     "Biodiversity & Animal Welfare": "Concerns the protection of wildlife habitats, biodiversity loss, and the responsible treatment of domestic and wild animals.",
     "Activism & Community Action": "Encompasses civic engagement related to the environment, including protests, petitions, and grassroots volunteer initiatives.",
     "Sustainable Transport & Energy": "Focuses on green infrastructure, including low-emission zones, renewable energy projects, and electric vehicle facilities.",
-    "Climate Discourse & Policy": "Captures debates surrounding climate change validity, the economic impact of green policies, and skepticism of environmental narratives.",
+    "Climate Scepticism": "Captures skepticism of climate change validity, opposition to net zero targets, criticism of the economic burden of green policies, and pushback against environmental regulations.",
+    "Environmental Advocacy & Green Policy": "Supports action on climate change, promotes renewable energy, endorses net zero commitments, and advocates for stronger environmental regulations and green investment.",
     "Nuisance & Environmental Health": "Relates to sensory pollution, including excessive noise, fireworks, hazardous odors, and air quality issues affecting public health.",
     "Other Environmental": "Any environmental concern not covered by the above categories."
   },
@@ -21,7 +22,8 @@
     "Other Immigration": "Any immigration-related issue not covered by the above categories."
   },
   "Housing": {
-    "Affordability & Market Economics": "Concerns the financial aspects of housing, including rent levels, mortgage rates, property prices, and economic policies affecting the market.",
+    "Homeowner Affordability & Market Economics": "Concerns the financial aspects of home ownership, including mortgage rates, property prices, stamp duty, house buying challenges, negative equity, and economic policies affecting the property market.",
+    "Tenant Affordability & Market Economics": "Concerns the financial aspects of renting, including rent levels, rent increases, deposit costs, rental market competition, housing benefit adequacy, and economic pressures affecting tenants.",
     "Planning & Land Use": "Focuses on the regulatory process of development, including council permissions, greenbelt usage, and the environmental footprint of new builds.",
     "Tenancy & Landlord Relations": "Covers the rental experience, including repair disputes, eviction concerns, lease agreements, and landlord conduct.",
     "Homelessness & Welfare": "Addresses housing insecurity, emergency accommodation, rough sleeping, and social support for those without stable shelter.",
@@ -31,31 +33,30 @@
     "Political Accountability": "Directs blame or requests for action toward local councils and politicians regarding housing promises and policy failures.",
     "Fraud & Malpractice": "Captures unethical behavior, including rental scams, fake listings, and dishonest practices by agents or developers.",
     "Infrastructure Impact": "Discusses the strain placed on local amenities, transport, and services by increased housing density.",
+    "Council Housing & Allocations": "Addresses the provision, maintenance, and allocation of council and social housing stock, including waiting lists and tenant services.",
     "Other Housing": "Any housing issue not covered by the above categories."
   },
   "Democracy": {
     "Voter Participation": "Focuses on the act of voting, including turnout encouragement, voter apathy, and skepticism about the value of the individual vote.",
     "Leadership & Party Critique": "Targets the performance, integrity, and accountability of specific politicians, parties, and the broader political establishment.",
     "Electoral Integrity": "Concerns the mechanics of elections, including transparency, procedural fairness, and the administration of polling.",
-    "Local Representation": "Addresses the effectiveness of local governance, council service delivery, and the fairness of electoral boundaries.",
     "Systemic Reform": "Advocates for major changes to the political system, including anti-establishment sentiments and calls to overhaul institutions.",
     "Campaigns & Media": "Critiques political messaging, campaigning tactics, media bias, and the manipulation of public discourse.",
     "Democratic Values": "Reflects on the principles of democracy, rights, and the gap between democratic ideals and institutional reality.",
     "Other Democracy": "Any democracy-related issue not covered by the above categories."
   },
-  "Economy": {
-    "Cost of Living Pressures": "Focuses on the impact of inflation on households, including rising utility bills, food costs, and unavoidable daily expenses.",
-    "Retail & High Street": "Concerns the health of local commerce, including shop closures, the shift to online retail, and high street revitalization.",
-    "Fiscal Policy & Corporate Conduct": "Critiques tax policies, government spending debts, and corporate profit-seeking behaviors.",
-    "Employment & Labor": "Addresses the job market, wage levels, contract security, and working conditions.",
-    "Banking & Cash Access": "Focuses on the availability of financial services, including branch closures and the transition to digital payments.",
-    "Economic Infrastructure": "Relates to physical developments that drive economy, such as transport hubs, commercial property, and urban renewal.",
-    "Consumer Protection": "Covers financial scams, hidden fees, exploitative pricing, and unethical business practices.",
-    "Other Economy": "Any economic issue not covered by the above categories."
+  "Local Government": {
+    "Council Administration & Governance": "Critiques the responsiveness, transparency, communication, and administrative competence of local councils and authorities.",
+    "Council Maintenance & Infrastructure": "Focuses on the operational performance of local authorities in maintaining public infrastructure, parks, libraries, leisure centres, communal spaces, street lighting, roads, drainage, signage, and communicating service disruptions.",
+    "Local Representation & Elections": "Addresses the effectiveness of local councillors, ward representation, council elections, and the fairness of electoral boundaries.",
+    "Council Tax & Spending": "Concerns council tax levels, budget allocations, spending transparency, the impact of budget cuts and political decisions on service quality, and the perceived value for money from local authority finances.",
+    "Planning & Development": "Focuses on the council planning process, planning applications, building permissions, and community consultation on proposed developments.",
+    "Public Consultation & Engagement": "Relates to how councils communicate with and involve residents in decision-making, including public meetings, consultations, and access to information.",
+    "Outsourcing & Contracts": "Critiques the awarding, management, and performance of council contracts to private companies and the quality of outsourced public services.",
+    "Other Local Government": "Any local government issue not covered by the above categories."
   },
-  "Cost of living": {
-    "Housing & Shelter Costs": "Specific to the rising costs of rent, property ownership, and council tax relative to affordability.",
-    "Utilities & Energy Bills": "Focuses on gas, electricity, and water charges, including supplier disputes and metering issues.",
+  "Economy": {
+    "Utilities & Energy Bills": "Focuses on gas, electricity, water, and broadband charges, including supplier disputes, metering issues, and service interruptions or failures.",
     "Food & Grocery Inflation": "Concerns the price of consumables, shrinkflation, and discrepancies in retail pricing.",
     "Transport Expenses": "Covers the costs associated with travel, including fuel prices, parking fees, and public transport fares.",
     "Public Fees & Levies": "Addresses government-imposed costs, such as service charges, fines, and the impact of austerity on personal finances.",
@@ -64,29 +65,20 @@
     "Income Disparity": "Contrasts stagnant wages or income against the rising cost of essential goods and services.",
     "Health & Care Costs": "Covers out-of-pocket expenses for medical, dental, and veterinary services.",
     "Consumer Value": "Critiques the declining quality of goods and services in relation to their increasing prices.",
-    "Other Cost of Living": "Any cost of living issue not covered by the above categories."
-  },
-  "Public services": {
-    "Waste & Sanitation": "Focuses on the reliability of bin collections, recycling facilities, and street cleaning services.",
-    "Roads & Infrastructure": "Concerns the physical maintenance of roads, lighting, drainage, and signage.",
-    "Medical Services": "Addresses the availability and quality of NHS, GP, hospital, and emergency care.",
-    "Postal & Delivery": "Relates to the reliability of mail services and parcel delivery networks.",
-    "Transport & Transit": "Focuses on the operation of public buses, trains, and parking enforcement.",
-    "Council Governance": "Critiques the responsiveness, communication, and administrative competence of local authorities.",
-    "Public Amenities": "Concerns the accessibility and condition of libraries, parks, leisure centers, and communal spaces.",
-    "Funding & Policy": "Addresses the impact of budget cuts, taxation, and political decisions on service quality.",
-    "Banking Access": "Focuses on the availability of face-to-face financial services and cash access points.",
-    "Utility Reliability": "Covers interruptions or failures in essential water, energy, and broadband supplies.",
-    "Safety & Policing": "Relates to the effectiveness of law enforcement and emergency response services.",
-    "Digital Access": "Critiques the usability and accessibility of online government portals and service apps.",
-    "Social Care": "Focuses on support services for the elderly, disabled, and vulnerable populations.",
-    "Other Public Services": "Any public service issue not covered by the above categories."
+    "Retail & High Street": "Concerns the health of local commerce, including shop closures, the shift to online retail, and high street revitalization.",
+    "Fiscal Policy & Corporate Conduct": "Critiques tax policies, government spending debts, and corporate profit-seeking behaviors.",
+    "Employment & Labour": "Addresses the job market, wage levels, contract security, and working conditions.",
+    "Banking & Cash Access": "Focuses on the availability of financial services, including branch closures, face-to-face banking access, cash access points, and the transition to digital payments.",
+    "Economic Infrastructure": "Relates to physical developments that drive economy, such as transport hubs, commercial property, and urban renewal.",
+    "Consumer Protection": "Covers financial scams, hidden fees, exploitative pricing, and unethical business practices.",
+    "Postal & Delivery": "Relates to the reliability and accessibility of mail services and parcel delivery networks.",
+    "Other Economy": "Any economic issue not covered by the above categories."
   },
   "Crime": {
     "Property Offenses": "Includes burglary, theft, vehicle break-ins, vandalism, and criminal damage to property.",
     "Violent Crime": "Covers physical assaults, weapon use, and aggressive acts resulting in bodily harm.",
     "Fraud & Deception": "Relates to scams, identity theft, and financial trickery, both online and offline.",
-    "Policing & Response": "Critiques the speed, effectiveness, and visibility of law enforcement.",
+    "Policing & Response": "Critiques the speed, effectiveness, and visibility of law enforcement and emergency response services.",
     "Anti-Social Behavior": "Focuses on public disorder, youth loitering, intimidation, and drug-related nuisance.",
     "Animal Cruelty": "Concerns abuse, neglect, or violent acts involving animals.",
     "Road & Traffic Offenses": "Addresses illegal parking, reckless driving, and vehicle-related misconduct without direct violence.",
@@ -113,7 +105,7 @@
     "Smart Devices": "Relates to the functionality and reliability of IoT, smart meters, and home security tech.",
     "Surveillance": "Debates the use of CCTV, facial recognition, drones, and privacy implications.",
     "Future Mobility": "Focuses on electric vehicles, autonomous driving, and delivery robots.",
-    "User Experience": "Critiques the design, glitches, and usability of apps and digital platforms.",
+    "User Experience": "Critiques the design, glitches, and usability of apps, digital platforms, online government portals, and public service applications.",
     "Cybersecurity": "Concerns online safety, hacking, data breaches, and digital fraud protection.",
     "Adoption & Resistance": "Reflects on the social impact of rapid tech change, including nostalgia for analog methods.",
     "Online Discourse": "Focuses on social media behavior, censorship, and the spread of misinformation.",
@@ -143,21 +135,24 @@
     "Other Education": "Any education-related issue not covered by the above categories."
   },
   "Transport": {
-    "Road Maintenance": "Concerns the physical state of road surfaces, drainage, and signage.",
-    "Public Transit Services": "Focuses on the reliability, cost, and availability of buses, trains, and aviation.",
-    "Road Safety & Behavior": "Addresses driving standards, speeding, and the safety of vulnerable road users.",
-    "Policy & Governance": "Critiques transport funding, planning, regulations, and political decision-making.",
-    "Green & Future Transport": "Relates to cycling infrastructure, electric vehicle charging, and sustainable mobility.",
+    "Road Infrastructure & Maintenance": "Concerns the physical state of road surfaces, potholes, drainage, signage, roadworks, and highway upkeep.",
+    "Road Safety & Driving": "Addresses driving standards, speeding, dangerous driving, road traffic accidents, and the safety of pedestrians, cyclists, and other vulnerable road users.",
+    "Rail Services": "Focuses on train services, rail network reliability, delays, cancellations, overcrowding, station facilities, fares, and rail infrastructure such as tracks and crossings.",
+    "Bus Services": "Covers local and regional bus routes, service frequency, reliability, cancellations, fares, bus stops, and the impact of route changes or cuts on communities.",
+    "Aviation & Airports": "Relates to air travel, airport operations, flight availability, airline service, airspace issues, airport expansion, and aircraft noise affecting local communities.",
+    "Policy & Governance": "Critiques transport funding, planning, regulations, parking enforcement, and political decision-making across all transport modes.",
+    "Green & Future Transport": "Relates to cycling infrastructure, electric vehicle charging, sustainable mobility, and emerging transport technologies.",
     "Other Transport": "Any transport-related issue not covered by the above categories."
   },
   "Health": {
-    "Access to Care": "Focuses on waiting times, appointment availability, and access to GPs or hospitals.",
+    "Access to Care": "Focuses on waiting times, appointment availability, service quality, and access to GPs, hospitals, and emergency care.",
     "Pharmacy & Dental": "Concerns the specific availability and cost of dental care and medication.",
     "Systemic Policy": "Critiques government funding, privatization, and management of the health service.",
     "Mental Wellbeing": "Addresses mental health struggles, support services, and community care.",
     "Preventive Health": "Relates to lifestyle advice, screenings, vaccinations, and public health campaigns.",
     "Vulnerable Groups": "Focuses on the specific health needs of the elderly, children, and disabled people.",
     "Veterinary Care": "Concerns the health, treatment costs, and welfare of pets.",
+    "Social Care": "Focuses on support services for the elderly, disabled, and vulnerable populations.",
     "Other Health": "Any health-related issue not covered by the above categories."
   },
   "Childcare and family": {
