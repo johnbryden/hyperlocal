@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     open_router_key: str = Field(None, alias="OPEN_ROUTER_KEY")
     gc_project: Optional[str] = Field(None, alias="GC_PROJECT")
     root_path: str = Field("gs://categorum-test/hyperlocal", alias="ROOT_PATH")
+    output_drive_root: str = Field("1am0JHqLbZkMJ87WXI_HWIR9CjueKNwmx", alias="OUTPUT_DRIVE_ROOT")
+    target_locations_sheet_id: str = Field("1Bj3syECc8jX9eCGNhutLd-C3QmZzWG1qf6WOhLV0gn4", alias="TARGET_LOCATIONS_SHEET_ID")
 
     @cached_property
     def root(self) -> AnyPath:

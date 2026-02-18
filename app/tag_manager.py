@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import socket
 import tempfile
 import time
@@ -15,6 +14,7 @@ except ImportError:  # cloudpathlib optional; Path fallback
 import pandas as pd
 
 from app.simple_logger import get_logger
+import app.file_utils as fu
 
 logger = get_logger(__name__)
 
@@ -41,12 +41,6 @@ def merge_tags(
         return tagman.merge_tags(df, tag_id_column=tag_id_column, columns=columns)
 
 
-def model_to_slug(model: str) -> str:
-    """Turn a model name into a filesystem-safe slug for paths and filenames."""
-    s = re.sub(r"[^\w\-.]", "-", model)
-    return re.sub(r"-+", "-", s).strip("-").lower() or "model"
-
-
 class TagManager:
     STALE_LOCK_SECONDS = 3600  # auto-override locks older than 1 hour
 
@@ -64,6 +58,8 @@ class TagManager:
                 and will be forcibly overridden. Defaults to STALE_LOCK_SECONDS (3600).
         """
         self.tags_path = AnyPath(tags_path)
+        if str(self.tags_path).startswith("gs://"):
+            self.tags_path = fu.file_name_to_slug(self.tags_path)
         self.tags_path.mkdir(parents=True, exist_ok=True)
 
         self.csv_path = self.tags_path / "tag_record.csv"

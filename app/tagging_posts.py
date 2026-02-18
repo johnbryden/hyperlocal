@@ -69,13 +69,15 @@ If no clearly identifiable local entity is mentioned, return "Non-specific".
 Post: "{row.body}"
 Comments: "{row.comment_texts}"
 
+Tags should not be subsets of other tags.
+
 Return your chosen tag and description as a JSON object with the following keys:
 - tag
-- tag_description (a short description of what or who this refers to, and its local relevance)
+- tag_description (a definition of what the tag means — broad enough to cover a range of posts that share this tag, but narrow enough so it doesn't overlap with other tags. Do NOT reference the specific post, its content, or any details from it.)
 Example output:
 {json.dumps({
 "tag": "Very terse: the specific local entity or topic being discussed",
-"tag_description": "A short description of what or who this refers to, and its local relevance",
+"tag_description": "Definition of the tag meaning — broad enough to cover many posts, narrow enough to not overlap with other tags",
 }, indent=4)}
 
 Only return the JSON object, nothing else.
@@ -117,7 +119,7 @@ def amalgamate_tags(df_posts_with_tags: pd.DataFrame,df_tags_record: pd.DataFram
 
     New tags should be amalgamated together if they are very similar to each other.
 
-    You can change any of the new tags and descriptions to make them more specific, broader or more accurate.
+    You can change any of the new tags and descriptions to make them more accurate. Each description should be a definition of the tag meaning — broad enough to cover a range of posts that share the tag, but narrow enough so it doesn't overlap with the other tags. Tags should not be subsets of other tags. Do not reference any specific post.
 
 new_tags = {json.dumps(df_posts_with_tags[['tag','tag_description']].to_dict(orient='records'), indent=4)}
 existing_tags = {json.dumps(df_tags_record[['tag','tag_description']].to_dict(orient='records'), indent=4) if df_tags_record is not None else "Not yet generated"}
@@ -400,6 +402,8 @@ If no clearly identifiable {context} is mentioned, return "Non-specific".
 
 {specificity_instruction}
 {avoid_instruction_block}
+Tags should not be subsets of other tags.
+
 Consider using one of the existing tags that have been previously generated:
 Existing_tags={json.dumps(existing_tags, indent=4)}
 
@@ -410,11 +414,11 @@ Comments: "{row.comment_texts}"
 
 Return your chosen {context} as {response_column}, and a description as a JSON object with the following keys:
 - {response_column}
-- {response_column_description} (the short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general)
+- {response_column_description} (a definition of what the tag means — broad enough to cover a range of posts that share this tag, but narrow enough so it doesn't overlap with the other tags. Do NOT reference the specific post, its content, or any details from it.)
 Example output:
 {json.dumps({
     "{response_column}": tag_example_hint,
-    "{response_column_description}": "A short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general",
+    "{response_column_description}": "Definition of the tag meaning — broad enough to cover many posts, narrow enough to not overlap with other tags",
 }, indent=4)}
 
 Only return the JSON object, nothing else.
@@ -539,11 +543,11 @@ Comments: "{row.comment_texts}"
 
 Return your chosen {context} as {response_column}, and a description as a JSON object with the following keys:
 - {response_column}
-- {response_column_description} (the short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general)
+- {response_column_description} (a definition of what the tag means — broad enough to cover a range of posts that share this tag, but narrow enough so it doesn't overlap with the other tags. Do NOT reference the specific post, its content, or any details from it.)
 Example output:
 {json.dumps({
     "{response_column}": tag_example_hint,
-    "{response_column_description}": "A short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general",
+    "{response_column_description}": "Definition of the tag meaning — broad enough to cover many posts, narrow enough to not overlap with other tags",
 }, indent=4)}
 
 Only return the JSON object, nothing else.
@@ -654,7 +658,7 @@ def generate_new_tags(
     num_untagged = len(df_untagged)
     min_new_tags = max(num_untagged // 3, 1)
     min_new_tags = min(min_new_tags, 10)
-
+    max_new_tags = 10
     # --- Build the post summaries ----------------------------------------
     post_summaries = []
     for _, row in df_untagged.iterrows():
@@ -681,11 +685,12 @@ Below is a list of posts and their comments that could NOT be tagged with any ex
 There is also a list of existing tags and their descriptions for reference.
 
 Your task:
-1. Read through the untagged posts and identify new, distinct topics/entities/issues.
-2. Generate **exactly {min_new_tags}** new tags (and short descriptions) that would cover these posts.
-3. Do NOT duplicate or repeat any of the existing tags.
-4. Each tag should be very terse (< 4 words) and each description should be a short sentence.
-5. Amalgamate similar posts into a single tag where appropriate.
+1. Read through the untagged posts and identify new, clearly distinct topics/entities/issues.
+2. Generate **around {min_new_tags} and no more than {max_new_tags}** new tags (and short descriptions) that would cover these posts.
+3. Do NOT duplicate or repeat any of the existing tags. Tags should not be subsets of other tags.It is ok to have very few tags if the posts are very similar.
+4. Each tag should be very terse (< 4 words).
+5. Each description should be a definition of what the tag means — broad enough to cover a range of posts that share this tag, but narrow enough so it doesn't overlap with the other tags. Do NOT reference any specific post, its content, or any details from the posts listed below.
+6. Amalgamate similar posts as much as possible into a single tag where appropriate.
 {avoid_line}
 
 Untagged posts ({num_untagged} total):
@@ -696,11 +701,11 @@ Existing tags:
 
 Return a JSON array of objects, each with:
 - "{response_column}": the new tag
-- "{response_column_description}": a short description
+- "{response_column_description}": a definition of the tag meaning — broad enough to cover many posts, narrow enough to not overlap with other tags
 
 Example:
 {json.dumps([
-    {response_column: "Example tag", response_column_description: "Short description of the tag"},
+    {response_column: "Example tag", response_column_description: "Definition of what this tag covers — broad enough for many posts, narrow enough to distinguish from other tags"},
 ], indent=4)}
 
 Only return the JSON array, nothing else.
@@ -817,6 +822,8 @@ If no clearly identifiable {context} is mentioned, return "Non-specific".
 
 {specificity_instruction}
 {tag_instruction}
+Tags should not be subsets of other tags.
+
 Consider using one of the existing tags that have been previously generated:
 Existing_tags={json.dumps(existing_tags, indent=4)}
 
@@ -827,11 +834,11 @@ Comments: "{row.comment_texts}"
 
 Return your chosen {context} as {response_column}, and a description as a JSON object with the following keys:
 - {response_column}
-- {response_column_description} (the short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general)
+- {response_column_description} (a definition of what the tag means — broad enough to cover a range of posts that share this tag, but narrow enough so it doesn't overlap with the other tags. Do NOT reference the specific post, its content, or any details from it.)
 Example output:
 {json.dumps({
     f"{response_column}": f"Very terse: the {context} being discussed, use spaces to separate words",
-    f"{response_column_description}": f"A short description of what this refers to, and its relevance to the {context}, use spaces to separate words - you may update the old description if the new description needs to be more general",
+    f"{response_column_description}": f"Definition of the tag meaning — broad enough to cover many posts, narrow enough to not overlap with other tags",
 }, indent=4)}
 
 Only return the JSON object, nothing else.

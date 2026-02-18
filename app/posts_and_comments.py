@@ -4,7 +4,7 @@ from typing import Optional, Set
 
 import pandas as pd
 
-import utility_functions as ut
+import app.utility_functions as ut
 from app.simple_logger import get_logger
 
 logger = get_logger(__name__)

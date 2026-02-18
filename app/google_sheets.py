@@ -110,8 +110,8 @@ def _column_number_to_letter(number: int) -> str:
     return "".join(reversed(letters))
 
 
-def _calculate_column_widths(display_rows: list[list[str]]) -> list[int]:
-    """Estimate pixel widths for each column capped at 300."""
+def _calculate_column_widths(display_rows: list[list[str]], max_width: int = 300) -> list[int]:
+    """Estimate pixel widths for each column capped at *max_width*."""
     if not display_rows:
         return []
 
@@ -125,22 +125,47 @@ def _calculate_column_widths(display_rows: list[list[str]]) -> list[int]:
             longest_line = max(len(line) for line in lines) if lines else 0
             max_chars = max(max_chars, longest_line)
         estimated_pixels = int(max_chars * 7 + 16) if max_chars else 64
-        widths.append(min(300, max(64, estimated_pixels)))
+        widths.append(min(max_width, max(64, estimated_pixels)))
     return widths
 
 
-def _calculate_row_heights(display_rows: list[list[str]]) -> list[int]:
-    """Estimate pixel heights for each row capped at 50."""
+def _calculate_row_heights(
+    display_rows: list[list[str]],
+    max_height: int = 50,
+    column_widths: list[int] | None = None,
+) -> list[int]:
+    """Estimate pixel heights for each row capped at *max_height*.
+
+    When *column_widths* is provided the estimate accounts for text
+    wrapping inside each column (i.e. long lines that exceed the column
+    width will be counted as multiple visual lines).
+    """
+    _PIXELS_PER_CHAR = 7
+    _CELL_PADDING_PX = 16
+    _LINE_HEIGHT_PX = 15
+    _MIN_ROW_PX = 21
+
     heights: list[int] = []
     for row in display_rows:
         max_lines = 1
-        for cell in row:
+        for col_idx, cell in enumerate(row):
             if not cell:
                 continue
-            line_count = len(cell.splitlines())
-            max_lines = max(max_lines, line_count if line_count > 0 else 1)
-        estimated_pixels = max(21, max_lines * 15)
-        heights.append(min(50, estimated_pixels))
+            explicit_lines = cell.splitlines() or [""]
+            if column_widths and col_idx < len(column_widths):
+                chars_per_line = max(1, (column_widths[col_idx] - _CELL_PADDING_PX) // _PIXELS_PER_CHAR)
+                visual_lines = 0
+                for line in explicit_lines:
+                    line_len = len(line) if line else 0
+                    if line_len <= chars_per_line:
+                        visual_lines += 1
+                    else:
+                        visual_lines += -(-line_len // chars_per_line)  # ceil division
+            else:
+                visual_lines = len(explicit_lines) if explicit_lines else 1
+            max_lines = max(max_lines, visual_lines)
+        estimated_pixels = max(_MIN_ROW_PX, max_lines * _LINE_HEIGHT_PX)
+        heights.append(min(max_height, estimated_pixels))
     return heights
 
 
@@ -387,10 +412,13 @@ def _apply_sheet_formatting(
     spreadsheet_id: str,
     sheet_id: int,
     column_count: int,
+    row_count: int,
     column_widths: list[int],
     row_heights: list[int],
+    vertical_alignment: str | None = None,
+    wrap_strategy: str | None = None,
 ) -> None:
-    """Apply header styling, column widths, and row heights."""
+    """Apply header styling, column widths, row heights, and optional cell formatting."""
     requests: list[dict] = []
 
     if column_count:
@@ -406,6 +434,31 @@ def _apply_sheet_formatting(
                     },
                     "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
                     "fields": "userEnteredFormat.textFormat.bold",
+                }
+            }
+        )
+
+    if column_count and row_count and (vertical_alignment or wrap_strategy):
+        cell_format: dict[str, object] = {}
+        fields: list[str] = []
+        if vertical_alignment:
+            cell_format["verticalAlignment"] = vertical_alignment
+            fields.append("userEnteredFormat.verticalAlignment")
+        if wrap_strategy:
+            cell_format["wrapStrategy"] = wrap_strategy
+            fields.append("userEnteredFormat.wrapStrategy")
+        requests.append(
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": row_count,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": column_count,
+                    },
+                    "cell": {"userEnteredFormat": cell_format},
+                    "fields": ",".join(fields),
                 }
             }
         )
@@ -615,52 +668,22 @@ def create_drive_folder(
         raise GoogleSheetsError(f"Unexpected error while creating folder: {exc}") from exc
 
 
-def get_drive_folder_by_name(
-    folder_name: str,
+def _find_drive_folder(
+    service: Any,
+    name: str,
+    parent_drive_folder_id: str,
     *,
-    parent_folder_id: str | None = None,
-    allow_multiple: bool = False,
-    prefer_latest: bool = False,
     verbose: bool = False,
-) -> dict[str, object] | list[dict[str, object]]:
-    """Retrieve Drive folder metadata by name, optionally scoped to a parent folder.
-
-    Args:
-        folder_name: Exact folder name to locate.
-        parent_folder_id: Optional parent folder ID to scope the search.
-        allow_multiple: When True, return all matching folders sorted by modified time.
-        prefer_latest: When True, return the most recently modified folder if duplicates exist.
-
-    Returns:
-        A metadata dictionary for the located folder or, when allow_multiple is True,
-        a list of metadata dictionaries ordered by most recent modification.
-
-    Raises:
-        ValueError: When required parameters are missing or incompatible flags are set.
-        GoogleSheetsError: When no folders are found or Google APIs fail.
-    """
-    if not folder_name:
-        raise ValueError("A folder_name is required.")
-    if allow_multiple and prefer_latest:
-        raise ValueError("allow_multiple and prefer_latest cannot both be True.")
-
-    service = get_google_drive_service(
-        scopes=["https://www.googleapis.com/auth/drive.metadata.readonly"],
-        verbose=verbose,
-    )
-
-    escaped_name = folder_name.replace("'", "\\'")
-    query_parts = [
+) -> list[dict[str, object]]:
+    """Search for Drive folders with *name* directly inside *parent_drive_folder_id*."""
+    escaped_name = name.replace("'", "\\'")
+    query = " and ".join([
         "mimeType = 'application/vnd.google-apps.folder'",
         "trashed = false",
         f"name = '{escaped_name}'",
-    ]
-    if parent_folder_id:
-        query_parts.append(f"'{parent_folder_id}' in parents")
-
-    query = " and ".join(query_parts)
+        f"'{parent_drive_folder_id}' in parents",
+    ])
     collected: list[dict[str, object]] = []
-
     try:
         request = service.files().list(
             q=query,
@@ -674,75 +697,114 @@ def get_drive_folder_by_name(
             includeItemsFromAllDrives=True,
             orderBy="modifiedTime desc, createdTime desc",
         )
-
         while request is not None:
             response = request.execute()
             collected.extend(response.get("files", []))
             request = service.files().list_next(request, response)
+    except HttpError as exc:
+        raise GoogleSheetsError(
+            f"Google API error while searching for folder '{name}': {exc}"
+        ) from exc
+    return collected
+
+
+def get_drive_folder_by_name(
+    folder_path: str | Path,
+    *,
+    parent_drive_folder_id: str,
+    allow_multiple: bool = False,
+    create_if_missing: bool = False,
+    verbose: bool = False,
+) -> dict[str, object]:
+    """Walk a path of nested Drive folders and return the deepest one.
+
+    Each segment of *folder_path* is resolved as a child folder of the
+    preceding one, starting from *parent_drive_folder_id*.
+
+    Args:
+        folder_path: One or more ``/``-separated folder names to traverse
+            (e.g. ``"Reports/2025/Q1"``).  A :class:`~pathlib.Path` is also
+            accepted.
+        parent_drive_folder_id: The Drive folder ID that the first path
+            segment must be a child of.  Required.
+        allow_multiple: When ``True``, log a warning and pick the most
+            recently modified folder when duplicates are found.  When
+            ``False`` (default), raise :class:`GoogleSheetsError`.
+        create_if_missing: When ``True``, create each missing folder segment
+            under the current parent.  When ``False`` (default), raise
+            :class:`GoogleSheetsError` if a segment cannot be found.
+        verbose: Emit detailed log messages.
+
+    Returns:
+        Metadata dictionary for the final (deepest) folder.
+
+    Raises:
+        ValueError: When required parameters are missing or the path is empty.
+        GoogleSheetsError: When a segment cannot be found / created or
+            duplicate segments exist and *allow_multiple* is ``False``.
+    """
+    parts = Path(folder_path).parts
+    if not parts:
+        raise ValueError("folder_path must contain at least one path segment.")
+    if not parent_drive_folder_id:
+        raise ValueError("A parent_drive_folder_id is required.")
+
+    service = get_google_drive_service(
+        scopes=["https://www.googleapis.com/auth/drive.metadata.readonly"]
+        if not create_if_missing
+        else None,
+        verbose=verbose,
+    )
+
+    current_parent_id = parent_drive_folder_id
+    current_folder: dict[str, object] | None = None
+
+    for segment in parts:
+        collected = _find_drive_folder(
+            service, segment, current_parent_id, verbose=verbose,
+        )
 
         if not collected:
+            if create_if_missing:
+                current_folder = create_drive_folder(
+                    segment, parent_folder_id=current_parent_id, check_if_exists=False, verbose=verbose,
+                )
+                if verbose:
+                    logger.info(
+                        "Created missing Drive folder segment.",
+                        extra={
+                            "segment": segment,
+                            "parent_drive_folder_id": current_parent_id,
+                            "created_folder_id": current_folder.get("id"),
+                        },
+                    )
+                current_parent_id = str(current_folder["id"])
+                continue
             raise GoogleSheetsError(
-                f"No Drive folder named '{folder_name}' found."
-                if not parent_folder_id
-                else f"No Drive folder named '{folder_name}' found under '{parent_folder_id}'."
+                f"No Drive folder named '{segment}' found under '{current_parent_id}'."
             )
 
         if len(collected) > 1:
-            if prefer_latest:
-                if verbose:
-                    logger.info(
-                        "Multiple folders found; returning most recently modified folder.",
-                        extra={
-                            "parent_folder_id": parent_folder_id,
-                            "folder_name": folder_name,
-                            "match_count": len(collected),
-                        },
-                    )
-                return collected[0]
             if not allow_multiple:
-                if verbose:
-                    logger.error(
-                        "Multiple folders found when duplicates were not permitted.",
-                        extra={
-                            "parent_folder_id": parent_folder_id,
-                            "folder_name": folder_name,
-                            "match_count": len(collected),
-                        },
-                    )
                 raise GoogleSheetsError(
-                    f"Multiple folders named '{folder_name}' were found. "
-                    "Use allow_multiple=True or prefer_latest=True to disambiguate."
+                    f"Multiple folders named '{segment}' found under "
+                    f"'{current_parent_id}'. Set allow_multiple=True to "
+                    "pick the most recently modified match."
                 )
-            if verbose:
-                logger.info(
-                    "Returning all matching folders for duplicate folder name.",
-                    extra={
-                        "parent_folder_id": parent_folder_id,
-                        "folder_name": folder_name,
-                        "match_count": len(collected),
-                    },
-                )
-            return collected
+            logger.warning(
+                "Multiple folders with the same name; using most recently modified.",
+                extra={
+                    "segment": segment,
+                    "parent_drive_folder_id": current_parent_id,
+                    "match_count": len(collected),
+                },
+            )
 
-        return collected[0]
-    except HttpError as exc:
-        if verbose:
-            logger.error(
-                "Google API responded with an error while retrieving folder metadata.",
-                exc_info=True,
-            )
-        raise GoogleSheetsError(
-            f"Google API error while retrieving folder metadata: {exc}"
-        ) from exc
-    except Exception as exc:
-        if verbose:
-            logger.error(
-                "Unexpected error occurred while retrieving folder metadata.",
-                exc_info=True,
-            )
-        raise GoogleSheetsError(
-            f"Unexpected error while retrieving folder metadata: {exc}"
-        ) from exc
+        current_folder = collected[0]
+        current_parent_id = str(current_folder["id"])
+
+    assert current_folder is not None
+    return current_folder
 
 
 def get_drive_file_by_name(
@@ -1019,19 +1081,25 @@ def load_dataframe_from_google_sheet(
 
 def upload_dataframe_to_google_sheet(
     dataframe: pd.DataFrame,
-    folder_id: str,
+    folder_id: str | dict[str, object],
     spreadsheet_title: str | None = None,
     sheet_title: str | None = None,
     overwrite: bool = True,
     verbose: bool = False,
     show_progress: bool = False,
     value_batch_size: int | None = None,
+    vertical_alignment: str = "TOP",
+    wrap_strategy: str = "WRAP",
+    max_row_height: int = 100,
+    max_column_width: int = 200,
 ) -> str:
     """Create a new Google Sheet in the specified Drive folder and upload a DataFrame.
 
     Args:
         dataframe: The pandas DataFrame to upload. Column names are written as headers.
         folder_id: The Drive folder that should contain the new spreadsheet.
+            Accepts either a plain folder ID string or a folder metadata dict
+            (as returned by :func:`get_drive_folder_by_name`).
         spreadsheet_title: Optional name for the spreadsheet. Defaults to a timestamped name.
         sheet_title: Optional title for the first worksheet. Defaults to "Sheet1".
         overwrite: Whether to overwrite an existing spreadsheet with the same title in the folder.
@@ -1039,6 +1107,12 @@ def upload_dataframe_to_google_sheet(
         show_progress: When True, display a progress bar (tqdm if installed) while uploading rows.
         value_batch_size: Override the number of rows written per request. Larger batches go faster but
             risk timeouts; defaults to 2000 rows.
+        vertical_alignment: Vertical alignment for all cells. One of "TOP", "MIDDLE", or "BOTTOM".
+            Pass None or an empty string to skip.
+        wrap_strategy: Text wrapping strategy for all cells. One of "WRAP", "OVERFLOW_CELL",
+            or "CLIP". Pass None or an empty string to skip.
+        max_row_height: Maximum row height in pixels.
+        max_column_width: Maximum column width in pixels.
 
     Returns:
         The ID of the newly created spreadsheet.
@@ -1051,6 +1125,8 @@ def upload_dataframe_to_google_sheet(
         raise ValueError("dataframe must be a pandas DataFrame.")
     if dataframe.empty:
         raise ValueError("Cannot upload an empty DataFrame.")
+    if isinstance(folder_id, dict):
+        folder_id = str(folder_id["id"])
     if not folder_id:
         raise ValueError("A target Drive folder_id is required.")
 
@@ -1153,8 +1229,12 @@ def upload_dataframe_to_google_sheet(
                 ["" if cell is None else str(cell) for cell in cleaned_row]
             )
 
-        column_widths = _calculate_column_widths(display_rows)
-        row_heights = _calculate_row_heights(display_rows)
+        column_widths = _calculate_column_widths(display_rows, max_width=max_column_width)
+        row_heights = _calculate_row_heights(
+            display_rows,
+            max_height=max_row_height,
+            column_widths=column_widths if wrap_strategy else None,
+        )
 
         _ensure_sheet_grid_size(
             sheets_service=sheets_service,
@@ -1179,8 +1259,11 @@ def upload_dataframe_to_google_sheet(
             spreadsheet_id=spreadsheet_id,
             sheet_id=0,
             column_count=len(headers),
+            row_count=len(values),
             column_widths=column_widths,
             row_heights=row_heights,
+            vertical_alignment=vertical_alignment or None,
+            wrap_strategy=wrap_strategy or None,
         )
 
         if verbose:
