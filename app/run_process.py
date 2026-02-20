@@ -20,13 +20,16 @@ from __future__ import annotations
 
 import argparse
 import re
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from cloudpathlib import AnyPath
 
 import app.file_utils as fu
 import app.google_sheets as gs
+import app.mp_report as mp_report
 import app.post_processing as pp
 import app.tag_manager as tm
 from app.settings import settings
@@ -225,12 +228,15 @@ def upload_results_to_sheets(
     data_root: AnyPath,
     target_locations: list[str],
     output_drive_root: str,
+    *,
+    force_report: bool = False,
 ) -> None:
     """
-    For each processed file, write output feather and/or sheet only when missing.
+    For each processed file, write output feather and/or sheet and/or MP report when missing.
     Same data in both: merged tags, renamed columns. Feather as
     ``output_<slug>_<date_from>_to_<date_to>.feather`` in *data_root*; sheet in
-    ``<output_drive_root>/<location>/data_sheets/``.
+    ``<output_drive_root>/<location>/data_sheets/``. MP report as
+    ``Constituency-Report-<slug>_<date_from>_<date_to>.docx`` in *data_root* (default, always generated if missing).
     """
     to_upload = find_processed_files(data_root, target_locations)
     if not to_upload:
@@ -254,8 +260,11 @@ def upload_results_to_sheets(
         )
         need_sheet = not any(f.get("name") == sheet_title for f in existing_sheets)
 
-        if not need_feather and not need_sheet:
-            logger.info("Output feather and sheet already exist, skipping",
+        report_path = data_root / f"Constituency-Report-{location_slug}-{date_from}-{date_to}.docx"
+        need_report = force_report or not report_path.exists()
+
+        if not need_feather and not need_sheet and not need_report:
+            logger.info("Output feather, sheet and MP report already exist, skipping",
                         extra={"location": location_display, "sheet": sheet_title})
             continue
 
@@ -268,9 +277,10 @@ def upload_results_to_sheets(
             fu.write_feather_to_anypath(df_out, output_feather_path)
             logger.info("Wrote output feather", extra={"file": output_feather_path.name, "rows": len(df_out)})
 
+        sheet_id = None
         if need_sheet:
             logger.info("Uploading sheet", extra={"location": location_display, "sheet": sheet_title})
-            gs.upload_dataframe_to_google_sheet(
+            sheet_id = gs.upload_dataframe_to_google_sheet(
                 df_out,
                 out_folder,
                 spreadsheet_title=sheet_title,
@@ -279,6 +289,55 @@ def upload_results_to_sheets(
                 max_row_height=200,
             )
             logger.info("Uploaded sheet", extra={"location": location_display, "rows": len(df_out)})
+        else:
+            match = next((f for f in existing_sheets if f.get("name") == sheet_title), None)
+            if match:
+                sheet_id = match.get("id")
+        output_sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit" if sheet_id else None
+
+        total_posts = None
+        if need_report:
+            posts_path = data_root / f"posts_{location_slug}_{date_from}_to_{date_to}.feather"
+            if posts_path.exists():
+                try:
+                    posts_df = fu.read_feather_from_anypath(posts_path)
+                    total_posts = len(posts_df)
+                except Exception as e:
+                    logger.warning("Could not load posts file for report summary", extra={"path": str(posts_path), "error": str(e)})
+            result = mp_report.generate_report(
+                df,
+                report_path,
+                location_display,
+                date_from,
+                date_to,
+                number_of_tags=settings.number_of_tags,
+                max_posts_per_tag=settings.max_number_of_comments_per_tag,
+                model=settings.mp_suggestion_model,
+                total_posts=total_posts,
+                n_political=len(df),
+                output_sheet_url=output_sheet_url,
+            )
+            if result is not None:
+                _, doc_bytes = result
+                report_docx_name = report_path.name
+                with tempfile.NamedTemporaryFile(
+                    suffix=".docx", delete=False
+                ) as tmp:
+                    tmp.write(doc_bytes)
+                    tmp_path = tmp.name
+                try:
+                    gs.upload_file_to_google_drive(
+                        tmp_path,
+                        folder_id=folder_id,
+                        file_name=report_docx_name,
+                        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                    logger.info(
+                        "Uploaded MP report to Google Drive",
+                        extra={"location": location_display, "file": report_docx_name},
+                    )
+                finally:
+                    Path(tmp_path).unlink(missing_ok=True)
 
 
 # ── CLI entry-point ──────────────────────────────────────────────────────────
@@ -309,6 +368,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Re-download posts from Elasticsearch even when local files exist.",
+    )
+    parser.add_argument(
+        "--force-report",
+        action="store_true",
+        default=False,
+        help="Regenerate and re-upload the constituency .docx report even when it already exists.",
     )
 
     return parser.parse_args(argv)
@@ -349,6 +414,7 @@ def main(argv: list[str] | None = None) -> None:
     # ── Output ─────────────────────────────────────────────────────────────
     upload_results_to_sheets(
         data_root, target_locations, settings.output_drive_root,
+        force_report=args.force_report,
     )
 
     logger.info("Pipeline finished")

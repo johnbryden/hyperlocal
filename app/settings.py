@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     output_drive_root: str = Field("1am0JHqLbZkMJ87WXI_HWIR9CjueKNwmx", alias="OUTPUT_DRIVE_ROOT")
     target_locations_sheet_id: str = Field("1Bj3syECc8jX9eCGNhutLd-C3QmZzWG1qf6WOhLV0gn4", alias="TARGET_LOCATIONS_SHEET_ID")
 
+    # MP report (constituency .docx)
+    number_of_tags: int = Field(10, alias="NUMBER_OF_TAGS")
+    max_number_of_comments_per_tag: int = Field(10, alias="MAX_NUMBER_OF_COMMENTS_PER_TAG")
+    mp_suggestion_model: str = Field("anthropic/claude-sonnet-4", alias="MP_SUGGESTION_MODEL")
+
     @cached_property
     def root(self) -> AnyPath:
         """root_path as an AnyPath (works for local and GCS paths)."""
