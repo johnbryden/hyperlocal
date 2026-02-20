@@ -282,6 +282,40 @@ def get_cost(input_tokens, output_tokens, cached_input_tokens=0, model="openai/g
             "input": 1.10, "cached_input": 0.55, "output": 4.40
         },
     }
+
+    # --- OpenRouter additions: openai/gpt-5* ---
+    pricing.update({
+        "openai/gpt-5":                 {"input": 1.25, "cached_input": None, "output": 10.00},
+        "openai/gpt-5-chat":            {"input": 1.25, "cached_input": None, "output": 10.00},
+        "openai/gpt-5-mini":            {"input": 0.25, "cached_input": None, "output": 2.00},
+        "openai/gpt-5-pro":             {"input": 15.00, "cached_input": None, "output": 120.00},
+
+        "openai/gpt-5-codex":           {"input": 1.25, "cached_input": None, "output": 10.00},
+
+        "openai/gpt-5.1":               {"input": 1.25, "cached_input": None, "output": 10.00},
+        "openai/gpt-5.1-chat":          {"input": 1.25, "cached_input": None, "output": 10.00},
+        "openai/gpt-5.1-codex":         {"input": 1.25, "cached_input": None, "output": 10.00},
+        "openai/gpt-5.1-codex-mini":    {"input": 0.25, "cached_input": None, "output": 2.00},
+        "openai/gpt-5.1-codex-max":     {"input": 1.25, "cached_input": None, "output": 10.00},
+
+        "openai/gpt-5.2":               {"input": 1.75, "cached_input": None, "output": 14.00},
+        "openai/gpt-5.2-chat":          {"input": 1.75, "cached_input": None, "output": 14.00},
+        "openai/gpt-5.2-codex":         {"input": 1.75, "cached_input": None, "output": 14.00},
+        "openai/gpt-5.2-pro":           {"input": 21.00, "cached_input": None, "output": 168.00},
+    })
+
+    # --- OpenRouter additions: google/gemini* ---
+    pricing.update({
+        "google/gemini-3-pro-preview":          {"input": 2.00, "cached_input": None, "output": 12.00},
+        "google/gemini-3-flash-preview":        {"input": 0.50, "cached_input": None, "output": 3.00},
+
+        "google/gemini-2.5-pro":                {"input": 1.25, "cached_input": None, "output": 10.00},
+        "google/gemini-2.5-flash":              {"input": 0.30, "cached_input": None, "output": 2.50},
+        "google/gemini-2.5-flash-preview-09-2025": {"input": 0.30, "cached_input": None, "output": 2.50},
+
+        "google/gemini-2.0-flash-001":          {"input": 0.10, "cached_input": None, "output": 0.40},
+    })
+
     
     if model not in pricing:
         raise ValueError(f"Unknown model: {model}")

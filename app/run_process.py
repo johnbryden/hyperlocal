@@ -8,12 +8,12 @@ Replicates the workflow from test_process.ipynb as a single command:
 Steps
 -----
 1. Setup       – load settings, ensure the GCS bucket exists, resolve target locations.
-2. Download    – sync weekly post/comment data from Elasticsearch for every location.
-3. Process     – find posts files that haven't been processed yet and run the
-                 three-stage PostProcessingPipeline (political filter → categorise → tag)
-                 on each one.
-4. Output      – for the most recent complete week, merge tags into each location's
-                 processed file and upload the result as a Google Sheet.
+2. Download    – download posts_*.feather for each location/week if not present.
+3. Process     – for each posts_*.feather, generate processed_*.feather if not present
+                 (PostProcessingPipeline: political filter → categorise → tag).
+4. Output      – for each processed_*.feather, generate output_*.feather and the Google
+                 Sheet if not present (merge tags; feather in data dir, sheet in
+                 <location>/data_sheets/).
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from cloudpathlib import AnyPath
 import app.file_utils as fu
 import app.google_sheets as gs
 import app.post_processing as pp
-import app.process_week as pw
 import app.tag_manager as tm
 from app.settings import settings
 from app.simple_logger import get_logger
@@ -179,6 +178,34 @@ def run_processing_pipeline(
 
 # ── 4. Output to Google Sheets ───────────────────────────────────────────────
 
+def find_processed_files(
+    data_root: AnyPath,
+    target_locations: list[str],
+) -> list[tuple[str, str, str, str, AnyPath]]:
+    """
+    Find all ``processed_*.feather`` files for the given locations.
+
+    Returns a chronologically-sorted list of
+    ``(date_from, date_to, location_display, location_slug, path)`` tuples.
+    """
+    loc_slugs = [fu.file_name_to_slug(loc) for loc in target_locations]
+    loc_group = "|".join(re.escape(s) for s in loc_slugs)
+    processed_pattern = re.compile(
+        rf"^processed_({loc_group})_(\d{{4}}-\d{{2}}-\d{{2}})_to_(\d{{4}}-\d{{2}}-\d{{2}})\.feather$"
+    )
+    slug_to_location = dict(zip(loc_slugs, target_locations))
+    candidates: list[tuple[str, str, str, str, AnyPath]] = []
+    for f in data_root.iterdir():
+        m = processed_pattern.match(f.name)
+        if not m:
+            continue
+        location_slug, date_from, date_to = m.groups()
+        location_display = slug_to_location[location_slug]
+        candidates.append((date_from, date_to, location_display, location_slug, f))
+    candidates.sort()
+    return candidates
+
+
 # Column mapping from internal dataframe names to the human-readable names
 # used in the output Google Sheet.
 FIELD_MAP = {
@@ -198,52 +225,57 @@ def upload_results_to_sheets(
     output_drive_root: str,
 ) -> None:
     """
-    For each location, read the most-recent-week's processed file, merge in
-    the human-readable tag names, rename columns, and upload to Google Sheets.
-
-    The output sheet lands in ``<output_drive_root>/<location>/data_sheets/``
-    on Google Drive.
+    For each processed file, write output feather and/or sheet only when missing.
+    Same data in both: merged tags, renamed columns. Feather as
+    ``output_<slug>_<date_from>_to_<date_to>.feather`` in *data_root*; sheet in
+    ``<output_drive_root>/<location>/data_sheets/``.
     """
-    # Determine the date window of the most recent complete week.
-    start_dt, end_dt = pw.get_most_recent_week(
-        tz=timezone.utc, week_start=0, weeks_ago=0,
-    )
-    logger.info("Uploading results for most recent week",
-                extra={"start": start_dt.strftime("%Y-%m-%d"),
-                       "end": end_dt.strftime("%Y-%m-%d")})
+    to_upload = find_processed_files(data_root, target_locations)
+    if not to_upload:
+        logger.info("No processed files found — nothing to upload")
+        return
 
-    for location in target_locations:
-        logger.info("Uploading results", extra={"location": location})
+    for date_from, date_to, location_display, location_slug, path in to_upload:
+        output_feather_path = data_root / f"output_{location_slug}_{date_from}_to_{date_to}.feather"
+        need_feather = not output_feather_path.exists()
 
-        # Build the path to the processed feather file for this week/location.
-        fin = fu.file_name_to_slug(
-            data_root / f"processed_{location}_{start_dt.strftime('%Y-%m-%d')}_to_{end_dt.strftime('%Y-%m-%d')}.feather"
-        )
-        df = fu.read_feather_from_anypath(fin)
-
-        # Merge human-readable tag and tag_description columns from the tag store.
-        df = tm.merge_tags(df, data_root / "tags" / location)
-
-        # Select and rename only the columns we want in the output sheet.
-        df_out = df[list(FIELD_MAP.keys())].rename(columns=FIELD_MAP).sort_values(by='Tag')
-
-        # Ensure the destination folder exists on Google Drive (create if needed).
-        out_folder_id = gs.get_drive_folder_by_name(
-            f"{location}/data_sheets",
+        sheet_title = f"output week starting {date_from}"
+        out_folder = gs.get_drive_folder_by_name(
+            f"{location_display}/data_sheets",
             parent_drive_folder_id=output_drive_root,
             create_if_missing=True,
         )
-
-        # Upload the dataframe as a new Google Sheet.
-        gs.upload_dataframe_to_google_sheet(
-            df_out,
-            out_folder_id,
-            spreadsheet_title=f'output week starting {start_dt.strftime("%Y-%m-%d")}',
-            max_column_width=500,
-            max_row_height=200,
+        folder_id = str(out_folder["id"])
+        existing_sheets = gs.list_drive_folder(
+            folder_id,
+            mime_types=["application/vnd.google-apps.spreadsheet"],
         )
-        logger.info("Uploaded sheet", extra={"location": location,
-                                             "rows": len(df_out)})
+        need_sheet = not any(f.get("name") == sheet_title for f in existing_sheets)
+
+        if not need_feather and not need_sheet:
+            logger.info("Output feather and sheet already exist, skipping",
+                        extra={"location": location_display, "sheet": sheet_title})
+            continue
+
+        df = fu.read_feather_from_anypath(path)
+        df = tm.merge_tags(df, data_root / "tags" / location_slug)
+        df_out = df[list(FIELD_MAP.keys())].rename(columns=FIELD_MAP).sort_values(by="Tag")
+
+        if need_feather:
+            fu.write_feather_to_anypath(df_out, output_feather_path)
+            logger.info("Wrote output feather", extra={"file": output_feather_path.name, "rows": len(df_out)})
+
+        if need_sheet:
+            logger.info("Uploading sheet", extra={"location": location_display, "sheet": sheet_title})
+            gs.upload_dataframe_to_google_sheet(
+                df_out,
+                out_folder,
+                spreadsheet_title=sheet_title,
+                overwrite=False,
+                max_column_width=500,
+                max_row_height=200,
+            )
+            logger.info("Uploaded sheet", extra={"location": location_display, "rows": len(df_out)})
 
 
 # ── CLI entry-point ──────────────────────────────────────────────────────────

@@ -138,12 +138,14 @@ def _calculate_row_heights(
 
     When *column_widths* is provided the estimate accounts for text
     wrapping inside each column (i.e. long lines that exceed the column
-    width will be counted as multiple visual lines).
+    width will be counted as multiple visual lines). Includes vertical
+    padding so the last line is not clipped by the cell bottom.
     """
     _PIXELS_PER_CHAR = 7
     _CELL_PADDING_PX = 16
-    _LINE_HEIGHT_PX = 15
-    _MIN_ROW_PX = 21
+    _LINE_HEIGHT_PX = 18  # enough for 10pt text + descenders in Sheets
+    _CELL_PADDING_VERTICAL_PX = 12  # top + bottom so last line isn't cut off
+    _MIN_ROW_PX = 30
 
     heights: list[int] = []
     for row in display_rows:
@@ -164,7 +166,10 @@ def _calculate_row_heights(
             else:
                 visual_lines = len(explicit_lines) if explicit_lines else 1
             max_lines = max(max_lines, visual_lines)
-        estimated_pixels = max(_MIN_ROW_PX, max_lines * _LINE_HEIGHT_PX)
+        estimated_pixels = max(
+            _MIN_ROW_PX,
+            _CELL_PADDING_VERTICAL_PX + max_lines * _LINE_HEIGHT_PX,
+        )
         heights.append(min(max_height, estimated_pixels))
     return heights
 
