@@ -14,7 +14,11 @@ from io import BytesIO
 from pathlib import Path
 from typing import Union
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -164,6 +168,67 @@ def generate_mp_suggestions_for_df(
     )
 
 
+def _category_display_label(cat: str) -> str:
+    """Display category with '.' replaced by ' -> '."""
+    return str(cat).replace(".", " -> ") if pd.notna(cat) else ""
+
+
+def _build_data_overview_figure(
+    four_weeks_data: list[tuple[str, pd.DataFrame]],
+    *,
+    top_n: int = 10,
+) -> tuple[BytesIO, str | None]:
+    """
+    Build a single horizontal bar chart from all weeks combined: top N categories
+    by total comment count, proportions (descending from top). Returns (PNG buffer, caption)
+    or (empty buffer, None) when no data.
+    """
+    if not four_weeks_data:
+        return BytesIO(), None
+    parts = []
+    for _date_from, week_df in four_weeks_data:
+        if "category" in week_df.columns and "comments" in week_df.columns:
+            parts.append(week_df[["category", "comments"]])
+    if not parts:
+        return BytesIO(), None
+    combined = pd.concat(parts, ignore_index=True)
+    df_cat = (
+        combined.groupby("category", dropna=False)["comments"]
+        .sum()
+        .nlargest(top_n)
+    )
+    if df_cat.empty:
+        return BytesIO(), None
+    n_weeks = len(four_weeks_data)
+    caption = (
+        f"Proportion of comments by category (previous {n_weeks} week{'s' if n_weeks != 1 else ''} combined)"
+    )
+    total = df_cat.sum()
+    proportions = (df_cat / total).values
+    labels = [_category_display_label(c) for c in df_cat.index]
+    fig, ax = plt.subplots(figsize=(6.5, 4.0))
+    # First in order appears at top: use labels so top category (labels[0]) is at top
+    sns.barplot(
+        x=proportions,
+        y=labels,
+        orient="h",
+        ax=ax,
+        palette="viridis",
+        order=labels,
+    )
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Proportion of comments", fontsize=11)
+    ax.set_ylabel("")
+    ax.tick_params(axis="y", labelsize=11)
+    ax.tick_params(axis="x", labelsize=10)
+    plt.tight_layout()
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf, caption
+
+
 def _add_hyperlink(paragraph, url: str, text: str, *, font_name: str | None = None):
     """Add a hyperlink to a paragraph. Optionally set font_name for the link run."""
     part = paragraph.part
@@ -205,6 +270,7 @@ def create_constituency_report(
     total_posts: int | None = None,
     n_political: int = 0,
     output_sheet_url: str | None = None,
+    four_weeks_data: list[tuple[str, pd.DataFrame]] | None = None,
 ) -> tuple[PathType, bytes]:
     """
     Write a Word report: one section per tag with stats and a table of posts
@@ -301,6 +367,20 @@ def create_constituency_report(
             row.cells[2].width = Inches(2.5)
         doc.add_paragraph()
 
+    if four_weeks_data:
+        doc.add_heading("Data overview", level=1)
+        fig_buf, caption = _build_data_overview_figure(four_weeks_data, top_n=10)
+        if fig_buf.getvalue():
+            fig_buf.seek(0)
+            doc.add_picture(fig_buf, width=Inches(5.5))
+            if caption:
+                cap_para = doc.add_paragraph()
+                cap_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = cap_para.add_run(caption)
+                run.font.italic = True
+                run.font.size = Pt(10)
+        doc.add_paragraph()
+
     footer_para = doc.add_paragraph()
     footer_para.add_run("Full data for this week is available in the output spreadsheet: ")
     if output_sheet_url:
@@ -343,6 +423,7 @@ def generate_report(
     total_posts: int | None = None,
     n_political: int | None = None,
     output_sheet_url: str | None = None,
+    four_weeks_data: list[tuple[str, pd.DataFrame]] | None = None,
 ) -> tuple[PathType, bytes] | None:
     """
     Build tag report dataframe, generate MP suggestions, and write .docx.
@@ -379,5 +460,6 @@ def generate_report(
         total_posts=total_posts,
         n_political=n_political,
         output_sheet_url=output_sheet_url,
+        four_weeks_data=four_weeks_data or [],
     )
     return output_path, doc_bytes

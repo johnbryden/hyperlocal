@@ -7,6 +7,7 @@ pyarrow
 cloudpathlib[gs]
 python-dotenv
 matplotlib
+seaborn>=0.12
 openai
 tiktoken
 pydantic_settings

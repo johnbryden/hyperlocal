@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
 from cloudpathlib import AnyPath
 
 import app.file_utils as fu
@@ -209,6 +210,25 @@ def find_processed_files(
     return candidates
 
 
+def _get_four_weeks_for_report(
+    to_upload: list[tuple[str, str, str, str, AnyPath]],
+    location_slug: str,
+    date_from: str,
+) -> list[tuple[str, AnyPath]]:
+    """
+    Return up to 4 (date_from, path) tuples for the given location, for the 4 most
+    recent weeks with date_from <= current date_from, sorted ascending (oldest first).
+    """
+    same_location = [
+        (d_from, d_to, _disp, _slug, p)
+        for (d_from, d_to, _disp, _slug, p) in to_upload
+        if _slug == location_slug and d_from <= date_from
+    ]
+    same_location.sort(key=lambda x: x[0])
+    four = same_location[-4:]
+    return [(d_from, p) for (d_from, _d_to, _disp, _slug, p) in four]
+
+
 # Column mapping from internal dataframe names to the human-readable names
 # used in the output Google Sheet.
 FIELD_MAP = {
@@ -261,7 +281,7 @@ def upload_results_to_sheets(
         need_sheet = not any(f.get("name") == sheet_title for f in existing_sheets)
 
         report_path = data_root / f"Constituency-Report-{location_slug}-{date_from}-{date_to}.docx"
-        need_report = force_report or not report_path.exists()
+        need_report = force_report or not report_path.exists() or need_sheet
 
         if not need_feather and not need_sheet and not need_report:
             logger.info("Output feather, sheet and MP report already exist, skipping",
@@ -296,6 +316,7 @@ def upload_results_to_sheets(
         output_sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit" if sheet_id else None
 
         total_posts = None
+        four_weeks_data: list[tuple[str, pd.DataFrame]] = []
         if need_report:
             posts_path = data_root / f"posts_{location_slug}_{date_from}_to_{date_to}.feather"
             if posts_path.exists():
@@ -304,6 +325,14 @@ def upload_results_to_sheets(
                     total_posts = len(posts_df)
                 except Exception as e:
                     logger.warning("Could not load posts file for report summary", extra={"path": str(posts_path), "error": str(e)})
+            # Build (date_from, df) for the previous 4 weeks for Data overview section.
+            for d_from, proc_path in _get_four_weeks_for_report(to_upload, location_slug, date_from):
+                if d_from == date_from:
+                    week_df = df
+                else:
+                    week_df = fu.read_feather_from_anypath(proc_path)
+                    week_df = tm.merge_tags(week_df, data_root / "tags" / location_slug)
+                four_weeks_data.append((d_from, week_df))
             result = mp_report.generate_report(
                 df,
                 report_path,
@@ -316,6 +345,7 @@ def upload_results_to_sheets(
                 total_posts=total_posts,
                 n_political=len(df),
                 output_sheet_url=output_sheet_url,
+                four_weeks_data=four_weeks_data,
             )
             if result is not None:
                 _, doc_bytes = result
