@@ -31,5 +31,5 @@ printf '%s\n' "${items[@]}" |
     x={}
     # make a safe filename from x (spaces->underscore, remove nasty chars)
     safe=$(printf "%s" "$x" | tr " /" "__" | tr -cd "A-Za-z0-9._-")
-    $PYTHON -u -m app.run_process --location "$x" >"junk/${safe}.log" 2>&1
+    $PYTHON -u -m app.run_process --location "$x" >"junk/logs/${safe}.log" 2>&1
   '

@@ -212,6 +212,8 @@ FIELD_MAP = {
     "timestamp": "Date posted",
     "url": "Link",
     "body": "Post text",
+    "comment_texts": "Comment texts",
+    "summary": "Summary",
     "category": "Category",
     "tag": "Tag",
     "tag_description": "Tag description",
@@ -259,6 +261,7 @@ def upload_results_to_sheets(
 
         df = fu.read_feather_from_anypath(path)
         df = tm.merge_tags(df, data_root / "tags" / location_slug)
+        df = pp.summarise_posts(df)
         df_out = df[list(FIELD_MAP.keys())].rename(columns=FIELD_MAP).sort_values(by="Tag")
 
         if need_feather:

@@ -17,6 +17,63 @@ from app.file_utils import (
 
 logger = get_logger(__name__)
 
+
+def summarise_posts(
+    df: pd.DataFrame,
+    *,
+    model: str = "google/gemini-2.5-flash",
+) -> pd.DataFrame:
+    """
+    Add a one-sentence summary for each post (and comments) using the LLM.
+
+    Expects df to have at least `body`; uses `comment_texts` if present.
+    Returns the dataframe with a new `summary` column.
+    """
+    def _to_scalar_text(val) -> str:
+        """Convert a row value (possibly array-like) to a single string for the prompt."""
+        if val is None:
+            return ""
+        if hasattr(val, "shape") and getattr(val, "size", 1) > 1:
+            return " ".join(str(x) for x in val.ravel() if pd.notna(x)).strip()
+        if isinstance(val, (list, tuple)):
+            return " ".join(str(x) for x in val if pd.notna(x)).strip()
+        if isinstance(val, str):
+            return val.strip()
+        try:
+            if pd.isna(val):
+                return ""
+        except (TypeError, ValueError):
+            pass
+        return str(val).strip() if val is not None else ""
+
+    def get_prompt(row: pd.Series) -> str:
+        body = _to_scalar_text(row.get("body", ""))
+        comments = _to_scalar_text(row.get("comment_texts", ""))
+        return f"""You are a qualitative researcher. In one short sentence, summarise the main point of this post and any comments. Focus on the issue or topic being discussed. Use British English.
+
+Post: "{body}"
+Comments: "{comments}"
+
+Reply with only the one-sentence summary, no need to mention that it's a post/comments/discussion, just the point of the post/comments, nothing else."""
+
+    def is_valid(row: pd.Series) -> bool:
+        if "summary" not in row.index:
+            return False
+        val = row["summary"]
+        if pd.isna(val):
+            return False
+        return bool(str(val).strip())
+
+    return ai.iterate_df_rows(
+        df,
+        get_prompt=get_prompt,
+        is_valid=is_valid,
+        response_column="summary",
+        model=model,
+        drop_meta_columns=True,
+    )
+
+
 def derive_region_from_df(df: pd.DataFrame) -> str:
     """
     Derive a region "bucket" name from a dataframe's `tags.location` column.
